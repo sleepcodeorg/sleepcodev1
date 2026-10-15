@@ -10,6 +10,16 @@ import litellm
 from sleepcode.providers.base import Provider, ProviderResponse, ToolCall
 from sleepcode.secrets import redact_secrets
 
+# Transient errors that should be retried with exponential backoff
+TRANSIENT_ERRORS = (
+    litellm.RateLimitError,  # type: ignore[attr-defined]
+    litellm.Timeout,  # type: ignore[attr-defined]
+    litellm.APIConnectionError,  # type: ignore[attr-defined]
+    litellm.InternalServerError,  # type: ignore[attr-defined]
+    litellm.ServiceUnavailableError,  # type: ignore[attr-defined]
+    litellm.BadGatewayError,  # type: ignore[attr-defined]
+)
+
 
 class LiteLLMProvider(Provider):
     """LiteLLM-backed provider supporting multiple model backends with retries."""
@@ -49,23 +59,14 @@ class LiteLLMProvider(Provider):
             except Exception as e:
                 last_exception = e
                 err_str = str(e)
+                extra = {self.api_key} if self.api_key else None
+                redacted_err = redact_secrets(err_str, extra_secrets=extra)
 
-                auth_terms = [
-                    "auth",
-                    "unauthorized",
-                    "api key",
-                    "invalid_key",
-                    "forbidden",
-                    "401",
-                    "403",
-                ]
-                is_auth_error = any(term in err_str.lower() for term in auth_terms)
-                if is_auth_error or attempt == max_attempts:
-                    extra = {self.api_key} if self.api_key else None
-                    redacted_err = redact_secrets(err_str, extra_secrets=extra)
-                    raise RuntimeError(f"LiteLLM completion error: {redacted_err}") from None
+                if isinstance(e, TRANSIENT_ERRORS) and attempt < max_attempts:
+                    time.sleep(2 ** (attempt - 1))
+                    continue
 
-                time.sleep(2 ** (attempt - 1))
+                raise RuntimeError(f"LiteLLM completion error: {redacted_err}") from None
 
         extra_sec = {self.api_key} if self.api_key else None
         redacted_err = redact_secrets(str(last_exception), extra_secrets=extra_sec)
