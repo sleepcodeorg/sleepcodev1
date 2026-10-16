@@ -67,6 +67,28 @@ def test_git_subcommand_allowlist_and_global_flag_rejection(tmp_path):
         )
 
 
+def test_destructive_git_checkout_and_branch_rejected(tmp_path):
+    ws = Workspace(tmp_path)
+
+    destructive_git_cmds = [
+        "git checkout -- README.md",
+        "git checkout -f main",
+        "git branch -D main",
+        "git branch -D sleepcode/x-20260101-000000",
+    ]
+
+    for cmd in destructive_git_cmds:
+        with pytest.raises(ValueError) as excinfo:
+            validate_command(cmd, ws)
+        assert any(
+            msg in str(excinfo.value)
+            for msg in [
+                "git checkout allows only 'checkout -b <name>'",
+                "git branch allows only '--show-current' and '--list'",
+            ]
+        )
+
+
 def test_python_command_restrictions(tmp_path):
     ws = Workspace(tmp_path)
 

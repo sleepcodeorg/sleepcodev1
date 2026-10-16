@@ -1,6 +1,7 @@
 # Copyright 2026 SleepCode contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import re
 import shlex
 from typing import List, Optional, Set
 
@@ -47,6 +48,8 @@ PROHIBITED_OPERATORS: List[str] = [
     "\n",
     "\r",
 ]
+
+BRANCH_NAME_REGEX = re.compile(r"^sleepcode/[a-z0-9-]+-\d{8}-\d{6}$")
 
 
 def check_shell_operators(command: str) -> None:
@@ -111,13 +114,14 @@ def validate_command(
 
     # Git command validation
     if tokens_lower[0] == "git":
-        # Reject any git global option/flag (starts with -) before or instead of subcommand
         subcommand: Optional[str] = None
-        for token in tokens[1:]:
+        subcommand_idx: int = 0
+        for i, token in enumerate(tokens[1:], start=1):
             if token.startswith("-"):
                 raise ValueError(f"Git global options/flags are prohibited: '{token}' in command.")
             else:
                 subcommand = token.lower()
+                subcommand_idx = i
                 break
 
         if not subcommand or subcommand not in ALLOWED_GIT_SUBCOMMANDS:
@@ -126,6 +130,31 @@ def validate_command(
                 f"Prohibited or unsupported git subcommand {sub_str}. "
                 f"Allowed git subcommands: {sorted(ALLOWED_GIT_SUBCOMMANDS)}"
             )
+
+        sub_args = tokens[subcommand_idx + 1 :]
+        sub_args_lower = tokens_lower[subcommand_idx + 1 :]
+
+        if subcommand == "checkout":
+            if len(sub_args) == 2 and sub_args[0] == "-b":
+                branch_name = sub_args[1]
+                if not BRANCH_NAME_REGEX.match(branch_name):
+                    msg = (
+                        f"Invalid branch name '{branch_name}'. "
+                        "git checkout allows only 'checkout -b <name>' "
+                        "matching ^sleepcode/[a-z0-9-]+-\\d{8}-\\d{6}$"
+                    )
+                    raise ValueError(msg)
+            else:
+                msg = (
+                    "git checkout allows only 'checkout -b <name>' "
+                    "with a valid sleepcode branch name."
+                )
+                raise ValueError(msg)
+
+        if subcommand == "branch":
+            allowed_branch_args = {(), ("--show-current",), ("--list",)}
+            if tuple(sub_args_lower) not in allowed_branch_args:
+                raise ValueError("git branch allows only '--show-current' and '--list'.")
 
     # Python command validation
     if tokens_lower[0] in {"python", "python3"}:

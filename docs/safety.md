@@ -7,7 +7,10 @@ SleepCode Phase 2 introduces shell execution (`run_shell`) and local Git operati
 
 > **WARNING:** The `run_shell` allowlist and command validation checks reduce operational risk, but they do **NOT** provide a security isolation boundary or sandbox.
 
-When `--allow-shell` is enabled, interpreters like `python` and test runners like `pytest` can execute arbitrary Python code inside the workspace. Allowlists and command parsing filters reduce human and LLM errors, but they cannot restrict code execution inside permitted language runtimes.
+When `--allow-shell` is enabled:
+- Running `python script.py` or `python -m pytest` executes arbitrary Python code inside the workspace environment.
+- `git_commit` runs `git add -A`, which stages every non-ignored file in the workspace directory.
+- Allowlists and command parsing filters reduce human and LLM errors, but they cannot restrict code execution inside permitted language runtimes.
 
 ---
 
@@ -15,9 +18,9 @@ When `--allow-shell` is enabled, interpreters like `python` and test runners lik
 
 | Command | Category | Capabilities & Permissions | Prohibitions & Safety Restrictions |
 | --- | --- | --- | --- |
-| `git` | Version Control | Runs `status`, `diff`, `add`, `commit`, `branch`, `checkout`, `log`, `rev-parse` subcommands. | Global options (`-c`, `--git-dir`, `--no-pager`, etc.) and subcommands like `push`, `remote`, `reset`, `clean` are rejected. Refuses commit on `main`/`master`. |
-| `python` / `python3` | Language Runtime | Runs Python script files in workspace or approved modules (`-m pytest`, `-m ruff`, `-m mypy`). | `-c` (inline code strings) and `-` (stdin code) are prohibited. Can run arbitrary code inside script files. |
-| `pytest` | Test Runner | Runs test suites within workspace root. | Executes test code inside Python interpreter (can execute arbitrary test code). |
+| `git` | Version Control | Runs `status`, `diff`, `add` (stages all files via `git add -A`), `commit`, `branch` (`--show-current`, `--list`), `checkout` (`-b <name>` matching `^sleepcode/[a-z0-9-]+-\d{8}-\d{6}$`), `log`, `rev-parse`. | Global options (`-c`, `--git-dir`, `--no-pager`, etc.), alias expansions, destructive `checkout` (`--`, `-f`), branch deletion (`-d`, `-D`), and subcommands like `push`, `remote`, `reset`, `clean` are rejected. Refuses commit on `main`/`master`. |
+| `python` / `python3` | Language Runtime | Runs Python script files inside workspace or approved modules (`-m pytest`, `-m ruff`, `-m mypy`). | `-c` (inline code strings) and `-` (stdin code) are prohibited. Can execute arbitrary Python code inside workspace script files. |
+| `pytest` | Test Runner | Runs test suites within workspace root. | Executes test code inside Python interpreter (can execute arbitrary code inside workspace). |
 | `ruff` | Linter / Formatter | Lints and formats code inside workspace. | Restricted to workspace filesystem scope. |
 | `mypy` | Type Checker | Performs static type checking. | Restricted to workspace filesystem scope. |
 | `ls` | Inspection | Lists workspace directory entries. | Path escapes outside workspace are blocked. |
