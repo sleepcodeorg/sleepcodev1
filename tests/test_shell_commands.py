@@ -18,13 +18,21 @@ def test_prohibited_operators(tmp_path):
 def test_allowlist_enforcement(tmp_path):
     ws = Workspace(tmp_path)
 
-    # Allowed command
-    tokens = validate_command("python -c \"print('hello')\"", ws)
+    # Allowed command (script in workspace)
+    (tmp_path / "script.py").write_text("print('hello')")
+    tokens = validate_command("python script.py", ws)
     assert tokens[0] == "python"
 
     # Non-allowlisted executable
     with pytest.raises(ValueError, match="not in the allowlist"):
         validate_command("bash -c 'echo hi'", ws)
+
+
+def test_pip_not_in_default_allowlist(tmp_path):
+    ws = Workspace(tmp_path)
+
+    with pytest.raises(ValueError, match="not in the allowlist"):
+        validate_command("pip install evilpkg", ws)
 
 
 def test_path_qualified_executables_rejected(tmp_path):
@@ -35,6 +43,40 @@ def test_path_qualified_executables_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="Path-qualified executables are not allowed"):
         validate_command("./my_script.sh", ws)
+
+
+def test_git_subcommand_allowlist_and_global_flag_rejection(tmp_path):
+    ws = Workspace(tmp_path)
+
+    bypass_cmds = [
+        "git -c core.x=1 push origin main",
+        "git --no-pager push origin main",
+        "git -c alias.evil=!id evil",
+    ]
+
+    for cmd in bypass_cmds:
+        with pytest.raises(ValueError) as excinfo:
+            validate_command(cmd, ws)
+        assert any(
+            msg in str(excinfo.value)
+            for msg in [
+                "Git global options/flags are prohibited",
+                "Prohibited or unsupported git subcommand",
+                "Prohibited git command",
+            ]
+        )
+
+
+def test_python_command_restrictions(tmp_path):
+    ws = Workspace(tmp_path)
+
+    # python -c rejected
+    with pytest.raises(ValueError, match="Python '-c' and '-' options are prohibited"):
+        validate_command("python -c 'import os'", ws)
+
+    # python - stdin rejected
+    with pytest.raises(ValueError, match="Python '-c' and '-' options are prohibited"):
+        validate_command("python -", ws)
 
 
 def test_deny_patterns(tmp_path):
@@ -68,6 +110,8 @@ def test_deny_patterns(tmp_path):
                 "Prohibited 'rm' flag",
                 "Prohibited git command",
                 "not in the allowlist",
+                "Git global options/flags are prohibited",
+                "Prohibited or unsupported git subcommand",
             ]
         )
 

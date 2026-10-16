@@ -9,14 +9,16 @@ from sleepcode.workspace import Workspace
 
 def test_shell_tool_execution(tmp_path):
     ws = Workspace(tmp_path)
-    res = run_command_in_workspace("python3 -c \"print('hello from shell')\"", ws)
+    (tmp_path / "app.py").write_text("print('hello from shell')")
+    res = run_command_in_workspace("python3 app.py", ws)
     assert res.ok
     assert "hello from shell" in res.output
 
 
 def test_shell_tool_timeout(tmp_path):
     ws = Workspace(tmp_path)
-    res = run_command_in_workspace('python3 -c "import time; time.sleep(10)"', ws, timeout=1)
+    (tmp_path / "sleep.py").write_text("import time\ntime.sleep(10)")
+    res = run_command_in_workspace("python3 sleep.py", ws, timeout=1)
     assert not res.ok
     assert "timed out after 1 seconds" in res.output
 
@@ -34,11 +36,12 @@ def test_env_scrubbing(monkeypatch, tmp_path):
     assert "DB_PASSWORD" not in env
     assert env.get("NORMAL_VAR") == "visible"
 
-    res = run_command_in_workspace(
-        "python3 -c \"import os; print(os.environ.get('OPENAI_API_KEY'))\"", ws
+    (tmp_path / "check_env.py").write_text(
+        "import os\nprint('KEY=' + str(os.environ.get('OPENAI_API_KEY')))\n"
     )
+    res = run_command_in_workspace("python3 check_env.py", ws)
     assert res.ok
-    assert "None" in res.output
+    assert "KEY=None" in res.output
 
 
 def test_run_shell_absent_without_allow_shell(tmp_path):

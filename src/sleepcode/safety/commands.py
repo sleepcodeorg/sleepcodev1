@@ -11,18 +11,32 @@ DEFAULT_ALLOWLIST: Set[str] = {
     "python",
     "python3",
     "pytest",
-    "pip",
     "ruff",
     "mypy",
     "ls",
     "cat",
     "grep",
-    "make",
-    "node",
-    "npm",
+}
+
+ALLOWED_GIT_SUBCOMMANDS: Set[str] = {
+    "status",
+    "diff",
+    "add",
+    "commit",
+    "branch",
+    "checkout",
+    "log",
+    "rev-parse",
+}
+
+ALLOWED_PYTHON_MODULES: Set[str] = {
+    "pytest",
+    "ruff",
+    "mypy",
 }
 
 PROHIBITED_OPERATORS: List[str] = [
+    ";",
     "&&",
     "||",
     "|",
@@ -65,11 +79,6 @@ def validate_command(
     if not tokens:
         raise ValueError("Empty command tokens.")
 
-    # Check for unquoted semicolon token or operator in raw tokens
-    for t in tokens:
-        if t == ";" or ";" in t and tokens[0].lower() not in {"python", "python3"}:
-            raise ValueError("Prohibited shell control operator ';' found in command.")
-
     allowlist = allowed_commands if allowed_commands is not None else DEFAULT_ALLOWLIST
 
     executable = tokens[0]
@@ -100,14 +109,38 @@ def validate_command(
                 ):
                     raise ValueError("Prohibited 'rm' flag (-r/-f) detected.")
 
-    # Check git push / git remote / git config --global
+    # Git command validation
     if tokens_lower[0] == "git":
-        if len(tokens_lower) > 1 and tokens_lower[1] == "push":
-            raise ValueError("Prohibited git command 'git push'.")
-        if len(tokens_lower) > 1 and tokens_lower[1] == "remote":
-            raise ValueError("Prohibited git command 'git remote'.")
-        if len(tokens_lower) > 2 and tokens_lower[1] == "config" and "--global" in tokens_lower[2:]:
-            raise ValueError("Prohibited git command 'git config --global'.")
+        # Reject any git global option/flag (starts with -) before or instead of subcommand
+        subcommand: Optional[str] = None
+        for token in tokens[1:]:
+            if token.startswith("-"):
+                raise ValueError(f"Git global options/flags are prohibited: '{token}' in command.")
+            else:
+                subcommand = token.lower()
+                break
+
+        if not subcommand or subcommand not in ALLOWED_GIT_SUBCOMMANDS:
+            sub_str = f"'{subcommand}'" if subcommand else "none"
+            raise ValueError(
+                f"Prohibited or unsupported git subcommand {sub_str}. "
+                f"Allowed git subcommands: {sorted(ALLOWED_GIT_SUBCOMMANDS)}"
+            )
+
+    # Python command validation
+    if tokens_lower[0] in {"python", "python3"}:
+        for i, token in enumerate(tokens[1:], start=1):
+            if token == "-c" or token == "-":
+                raise ValueError("Python '-c' and '-' options are prohibited.")
+            if token == "-m":
+                if i + 1 >= len(tokens):
+                    raise ValueError("Missing module after '-m'.")
+                mod_name = tokens[i + 1].lower()
+                if mod_name not in ALLOWED_PYTHON_MODULES:
+                    raise ValueError(
+                        f"Module '{mod_name}' not allowed with 'python -m'. "
+                        f"Allowed modules: {sorted(ALLOWED_PYTHON_MODULES)}"
+                    )
 
     # Path escape check on arguments
     for arg in tokens[1:]:
@@ -122,6 +155,7 @@ def validate_command(
         ):
             continue
 
+        # If it looks like a path argument (contains slashes or relative parent traversal)
         if (
             val_to_check.startswith("/")
             or val_to_check.startswith("~")
@@ -129,6 +163,9 @@ def validate_command(
             or "/" in val_to_check
             or "\\" in val_to_check
         ):
+            # Skip checking if it's a git branch name argument in git command or flags
+            if tokens_lower[0] == "git":
+                continue
             try:
                 workspace.resolve_path(val_to_check)
             except WorkspaceError as e:
