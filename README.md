@@ -21,6 +21,19 @@ sleepcode run "Create a python script hello.py that prints Hello World" \
   --model openai/gpt-4o-mini
 ```
 
+### Safe Shell & Test-Repair Loop
+```bash
+sleepcode run "Fix failing tests in user auth module" \
+  --workspace ./sample \
+  --model openai/gpt-4o-mini \
+  --allow-shell \
+  --test-cmd "pytest -q" \
+  --repair-attempts 2
+```
+
+## Safety Note
+The `--allow-shell` flag enables shell execution (`run_shell`) and local git tools (`git_status`, `git_diff`, `git_create_branch`, `git_commit`). The allowlist and operator rejection filters reduce accidental errors, but **they do NOT constitute a security sandbox**. Interpreters like `python` and `pytest` can execute arbitrary code inside the workspace. See `docs/safety.md` for full details. True container isolation is planned for Phase 5.
+
 ## Running Tests and Verification
 ```bash
 bash scripts/verify.sh

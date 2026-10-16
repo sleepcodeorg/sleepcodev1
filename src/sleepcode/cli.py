@@ -10,13 +10,16 @@ from rich.panel import Panel
 
 import sleepcode
 from sleepcode.agent.loop import AgentLimits, AgentLoop
+from sleepcode.agent.repair import run_repair_loop
 from sleepcode.config import get_config_path, load_config, set_provider_key
 from sleepcode.providers.base import Provider
 from sleepcode.providers.litellm_provider import LiteLLMProvider
 from sleepcode.secrets import get_secret
 from sleepcode.tools.files import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from sleepcode.tools.git import GitCommitTool, GitCreateBranchTool, GitDiffTool, GitStatusTool
 from sleepcode.tools.registry import ToolRegistry
 from sleepcode.tools.search import SearchTool
+from sleepcode.tools.shell import RunShellTool
 from sleepcode.workspace import Workspace
 
 app = typer.Typer(
@@ -78,6 +81,15 @@ def run(
     workspace: Path = typer.Option(..., "--workspace", "-w", help="Workspace directory path"),
     model: str = typer.Option(..., "--model", "-m", help="LLM model identifier"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Run in dry-run mode"),
+    allow_shell: bool = typer.Option(
+        False, "--allow-shell", help="Allow agent to run safe shell commands and git tools"
+    ),
+    test_cmd: Optional[str] = typer.Option(
+        None, "--test-cmd", help="Optional test command to verify agent work"
+    ),
+    repair_attempts: int = typer.Option(
+        2, "--repair-attempts", help="Number of repair attempts if tests fail (max 5)"
+    ),
     max_iterations: int = typer.Option(40, "--max-iterations", help="Maximum agent iterations"),
     max_cost_usd: float = typer.Option(2.00, "--max-cost-usd", help="Maximum cost limit in USD"),
 ) -> None:
@@ -122,10 +134,65 @@ def run(
     registry.register(ListDirTool(ws))
     registry.register(SearchTool(ws))
 
+    if allow_shell:
+        registry.register(RunShellTool(ws))
+        registry.register(GitStatusTool(ws))
+        registry.register(GitDiffTool(ws))
+        registry.register(GitCreateBranchTool(ws))
+        registry.register(GitCommitTool(ws))
+
     limits = AgentLimits(
         max_iterations=max_iterations,
         max_cost_usd=max_cost_usd,
     )
+
+    extra_secrets = {api_key} if api_key else set()
+
+    if test_cmd:
+        status_msg = "[bold blue]Running SleepCode agent with test-repair loop...[/bold blue]"
+        with console.status(status_msg):
+            try:
+                repair_res = run_repair_loop(
+                    task=task,
+                    workspace=ws,
+                    model=model,
+                    provider=provider,
+                    tools=registry,
+                    test_cmd=test_cmd,
+                    repair_attempts=repair_attempts,
+                    limits=limits,
+                    dry_run=dry_run,
+                    extra_secrets=extra_secrets,
+                )
+            except Exception as e:
+                console.print(f"[bold red]Error in test repair loop: {str(e)}[/bold red]")
+                raise typer.Exit(code=1) from e
+
+        result = repair_res.agent_result
+        status_str = (
+            "[bold green]tests_passed[/bold green]"
+            if repair_res.status == "tests_passed"
+            else "[bold red]tests_failed[/bold red]"
+        )
+        changed_str = ", ".join(result.files_changed) if result.files_changed else "None"
+        summary_text = (
+            f"Status: {status_str}\n"
+            f"Repair Attempts Used: {repair_res.attempts_used}\n"
+            f"Stop Reason: {result.stop_reason}\n"
+            f"Run ID: {result.run_id}\n"
+            f"Files Changed: {changed_str}\n"
+            f"Tokens: {result.total_tokens}\n"
+            f"Cost: ${result.total_cost:.4f}\n\n"
+            f"Test Output:\n{repair_res.test_output}\n\n"
+            f"Final Output:\n{result.final_text}"
+        )
+
+        console.print(Panel(summary_text, title="SleepCode Agent Summary", expand=False))
+
+        if repair_res.status == "tests_passed":
+            raise typer.Exit(code=0)
+        else:
+            raise typer.Exit(code=1)
 
     loop = AgentLoop(
         task=task,
@@ -135,7 +202,7 @@ def run(
         tools=registry,
         limits=limits,
         dry_run=dry_run,
-        extra_secrets={api_key} if api_key else set(),
+        extra_secrets=extra_secrets,
     )
 
     with console.status("[bold blue]Running SleepCode agent...[/bold blue]"):
