@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 class SleepCodeConfig(BaseModel):
     keys: Dict[str, str] = Field(default_factory=dict)
     default_model: Optional[str] = None
+    allowed_commands: Optional[List[str]] = None
 
 
 def get_config_dir() -> Path:

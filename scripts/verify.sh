@@ -20,7 +20,35 @@ mypy src
 echo "=== Step 5: Pytest ==="
 pytest -q
 
-echo "=== Step 6: License, NOTICE, and SPDX headers check ==="
+echo "=== Step 6: Phase 2 Safety & Tool Registry Checks ==="
+python3 -c "
+from pathlib import Path
+from sleepcode.cli import app, set_test_provider_override
+from sleepcode.providers.fake_provider import FakeProvider
+from sleepcode.providers.base import ProviderResponse
+from sleepcode.tools.registry import ToolRegistry
+from typer.testing import CliRunner
+
+# Check 1: run_shell tool absent when --allow-shell is NOT passed
+runner = CliRunner()
+fake_resp = ProviderResponse(text='Done', tool_calls=[])
+set_test_provider_override(FakeProvider([fake_resp]))
+
+ws_dir = Path('/tmp/sleepcode-verify-test')
+ws_dir.mkdir(parents=True, exist_ok=True)
+
+res_no_shell = runner.invoke(app, ['run', 'test task', '--workspace', str(ws_dir), '--model', 'openai/gpt-4o-mini'])
+assert res_no_shell.exit_code == 0, f'CLI run failed: {res_no_shell.output}'
+
+# Check tool registry schema directly
+reg_default = ToolRegistry()
+schemas = [s['function']['name'] for s in reg_default.get_schemas()]
+assert 'run_shell' not in schemas, 'run_shell tool present without --allow-shell'
+assert 'git_status' not in schemas, 'git_status tool present without --allow-shell'
+print('Verified: run_shell and git tools absent without --allow-shell')
+"
+
+echo "=== Step 7: License, NOTICE, and SPDX headers check ==="
 if [ ! -f "LICENSE" ]; then
     echo "ERROR: LICENSE file missing"
     exit 1
@@ -41,7 +69,7 @@ if [ "$MISSING_HEADERS" -eq 1 ]; then
     exit 1
 fi
 
-echo "=== Step 7: Key pattern leakage check ==="
+echo "=== Step 8: Key pattern leakage check ==="
 KEY_LEAKS=$(grep -rnEI --exclude="test_secrets.py" 'sk-[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{20,}' src/ tests/ docs/ || true)
 if [ -n "$KEY_LEAKS" ]; then
     echo "ERROR: Potential real API key pattern found outside test_secrets.py:"
@@ -49,7 +77,7 @@ if [ -n "$KEY_LEAKS" ]; then
     exit 1
 fi
 
-echo "=== Step 8: CLI e2e test with fake provider ==="
+echo "=== Step 9: CLI e2e test with fake provider ==="
 TEMP_WS=$(mktemp -d -t sleepcode-ws-XXXXXX)
 python3 -c "
 from pathlib import Path

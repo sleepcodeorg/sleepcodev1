@@ -62,40 +62,47 @@ class AgentLoop:
         self.run_id = f"run-{int(self.clock())}-{secrets.token_hex(4)}"
         self.logger = EventLogger(self.run_id, extra_secrets=self.extra_secrets)
         self.conversation = Conversation(SYSTEM_PROMPT)
+        self._started = False
+
+        # Persistent limit metrics across loop invocations (including repair turns)
+        self.iterations = 0
+        self.total_tokens = 0
+        self.total_cost = 0.0
+        self.changed_files_set: Set[str] = set()
+        self.start_time: Optional[float] = None
 
     def run(self) -> AgentResult:
-        self.conversation.add_user_message(self.task)
+        if not self._started:
+            self.conversation.add_user_message(self.task)
+            self._started = True
 
-        iterations = 0
-        total_tokens = 0
-        total_cost = 0.0
-        changed_files_set: Set[str] = set()
-        start_time = self.clock()
+        if self.start_time is None:
+            self.start_time = self.clock()
 
         warned_unknown_cost = False
 
         while True:
-            iterations += 1
+            self.iterations += 1
 
-            if iterations > self.limits.max_iterations:
+            if self.iterations > self.limits.max_iterations:
                 return self._build_result(
                     final_text="Agent stopped: Exceeded maximum iterations limit.",
                     stop_reason="max_iterations",
-                    iterations=iterations - 1,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost,
-                    files_changed=sorted(changed_files_set),
+                    iterations=self.iterations - 1,
+                    total_tokens=self.total_tokens,
+                    total_cost=self.total_cost,
+                    files_changed=sorted(self.changed_files_set),
                 )
 
-            elapsed = self.clock() - start_time
+            elapsed = self.clock() - self.start_time
             if elapsed > self.limits.max_wall_seconds:
                 return self._build_result(
                     final_text="Agent stopped: Exceeded maximum wall time limit.",
                     stop_reason="max_wall_seconds",
-                    iterations=iterations - 1,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost,
-                    files_changed=sorted(changed_files_set),
+                    iterations=self.iterations - 1,
+                    total_tokens=self.total_tokens,
+                    total_cost=self.total_cost,
+                    files_changed=sorted(self.changed_files_set),
                 )
 
             tool_schemas = self.tools.get_schemas()
@@ -109,14 +116,14 @@ class AgentLoop:
                 return self._build_result(
                     final_text=f"Agent error during model completion: {str(e)}",
                     stop_reason="error",
-                    iterations=iterations,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost,
-                    files_changed=sorted(changed_files_set),
+                    iterations=self.iterations,
+                    total_tokens=self.total_tokens,
+                    total_cost=self.total_cost,
+                    files_changed=sorted(self.changed_files_set),
                 )
 
             step_tokens = response.input_tokens + response.output_tokens
-            total_tokens += step_tokens
+            self.total_tokens += step_tokens
 
             step_cost = calculate_cost(
                 model=self.model,
@@ -126,7 +133,7 @@ class AgentLoop:
             )
 
             if step_cost is not None:
-                total_cost += step_cost
+                self.total_cost += step_cost
             else:
                 if not warned_unknown_cost:
                     msg = (
@@ -135,28 +142,28 @@ class AgentLoop:
                     print(msg)
                     warned_unknown_cost = True
 
-            if total_tokens > self.limits.max_total_tokens:
+            if self.total_tokens > self.limits.max_total_tokens:
                 return self._build_result(
                     final_text="Agent stopped: Exceeded maximum total tokens limit.",
                     stop_reason="max_total_tokens",
-                    iterations=iterations,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost,
-                    files_changed=sorted(changed_files_set),
+                    iterations=self.iterations,
+                    total_tokens=self.total_tokens,
+                    total_cost=self.total_cost,
+                    files_changed=sorted(self.changed_files_set),
                 )
 
-            if total_cost > self.limits.max_cost_usd:
+            if self.total_cost > self.limits.max_cost_usd:
                 return self._build_result(
                     final_text="Agent stopped: Exceeded maximum cost limit.",
                     stop_reason="max_cost_usd",
-                    iterations=iterations,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost,
-                    files_changed=sorted(changed_files_set),
+                    iterations=self.iterations,
+                    total_tokens=self.total_tokens,
+                    total_cost=self.total_cost,
+                    files_changed=sorted(self.changed_files_set),
                 )
 
             self.logger.log_event(
-                step=iterations,
+                step=self.iterations,
                 role="assistant",
                 result_summary=response.text[:200] if response.text else None,
                 tokens=step_tokens,
@@ -172,10 +179,10 @@ class AgentLoop:
                 return self._build_result(
                     final_text=final_text,
                     stop_reason="completed",
-                    iterations=iterations,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost,
-                    files_changed=sorted(changed_files_set),
+                    iterations=self.iterations,
+                    total_tokens=self.total_tokens,
+                    total_cost=self.total_cost,
+                    files_changed=sorted(self.changed_files_set),
                 )
 
             raw_tool_calls_msg = []
@@ -197,12 +204,12 @@ class AgentLoop:
             for tc in response.tool_calls:
                 res = self.tools.execute(tc.name, tc.arguments, dry_run=self.dry_run)
                 for fc in res.files_changed:
-                    changed_files_set.add(fc)
+                    self.changed_files_set.add(fc)
 
                 self.conversation.add_tool_result(tool_call_id=tc.id, output=res.output)
 
                 self.logger.log_event(
-                    step=iterations,
+                    step=self.iterations,
                     role="tool",
                     tool_name=tc.name,
                     arguments=tc.arguments,
