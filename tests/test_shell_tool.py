@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from sleepcode.safety.env import build_minimal_env
-from sleepcode.tools.shell import RunShellTool, run_command_in_workspace
-
 from sleepcode.tools.registry import ToolRegistry
+from sleepcode.tools.shell import RunShellTool, run_command_in_workspace
 from sleepcode.workspace import Workspace
 
 
