@@ -26,6 +26,10 @@ def test_slug_generation_and_regex():
 def test_git_commit_refuses_on_main_and_master(tmp_path):
     ws = Workspace(tmp_path)
     subprocess.run(["git", "init"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=str(tmp_path), check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=str(tmp_path), check=True
+    )
     subprocess.run(["git", "checkout", "-b", "main"], cwd=str(tmp_path), check=True)
 
     # Initial commit so HEAD is valid
