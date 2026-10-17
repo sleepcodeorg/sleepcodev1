@@ -43,16 +43,17 @@ def load_config() -> SleepCodeConfig:
 
 
 def save_config(config: SleepCodeConfig) -> None:
-    """Save configuration to config.yaml with 0600 file permissions."""
+    """Save configuration to config.yaml with 0600 file permissions from creation."""
     config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path = get_config_path()
 
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config.model_dump(), f)
+    if config_path.exists():
+        os.chmod(config_path, 0o600)
 
-    # Set secure 0600 permissions
-    os.chmod(config_path, 0o600)
+    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        yaml.safe_dump(config.model_dump(), f)
 
 
 def set_provider_key(provider: str, key: str) -> None:
