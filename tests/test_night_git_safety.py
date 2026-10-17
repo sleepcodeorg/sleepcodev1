@@ -13,7 +13,7 @@ from sleepcode.night.git_ops import (
 )
 
 
-def create_temp_git_repo(path: Path) -> Path:
+def create_temp_git_repo(path: Path, branch: str = "master") -> Path:
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["git", "init"], cwd=path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -23,6 +23,8 @@ def create_temp_git_repo(path: Path) -> Path:
     (path / "README.md").write_text("# Test Repo\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=path, check=True)
     subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=path, check=True)
+    if branch != "master":
+        subprocess.run(["git", "branch", "-m", branch], cwd=path, check=True)
     return path
 
 
@@ -40,6 +42,29 @@ def test_branch_creation_and_restoration(tmp_path: Path) -> None:
 
     restore_branch(repo, orig_branch)
     assert get_current_branch(repo) == orig_branch
+
+
+def test_commit_refused_on_main_branch(tmp_path: Path) -> None:
+    repo = create_temp_git_repo(tmp_path / "repo_main", branch="main")
+    assert get_current_branch(repo) == "main"
+
+    (repo / "unwanted.py").write_text("print('bad')", encoding="utf-8")
+
+    # Call commit function while on main
+    ok, msg = commit_task_changes(repo, "Unintended commit on main")
+    assert ok is False
+    assert "Refused to commit: current branch is main/master" in msg
+
+    # Verify no commit was created on main
+    log_res = subprocess.run(
+        ["git", "log", "-n", "1", "--oneline"],
+        cwd=repo,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    assert "Initial commit" in log_res.stdout
+    assert "Unintended commit" not in log_res.stdout
 
 
 def test_secret_path_check_refuses_commit(tmp_path: Path) -> None:
