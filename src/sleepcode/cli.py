@@ -12,9 +12,14 @@ import sleepcode
 from sleepcode.agent.loop import AgentLimits, AgentLoop
 from sleepcode.agent.repair import run_repair_loop
 from sleepcode.config import get_config_path, load_config, set_provider_key
+from sleepcode.doctor import run_doctor
+from sleepcode.night.cli import night_app
 from sleepcode.providers.base import Provider
 from sleepcode.providers.litellm_provider import LiteLLMProvider
+from sleepcode.queue.cli import queue_app
+from sleepcode.report.cli import report_app
 from sleepcode.secrets import get_secret
+from sleepcode.setup_wizard import run_setup
 from sleepcode.tools.files import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from sleepcode.tools.git import GitCommitTool, GitCreateBranchTool, GitDiffTool, GitStatusTool
 from sleepcode.tools.registry import ToolRegistry
@@ -29,6 +34,9 @@ app = typer.Typer(
 )
 config_app = typer.Typer(help="Manage SleepCode configuration and API keys.")
 app.add_typer(config_app, name="config")
+app.add_typer(queue_app, name="queue")
+app.add_typer(night_app, name="night")
+app.add_typer(report_app, name="report")
 
 console = Console()
 
@@ -44,6 +52,20 @@ def set_test_provider_override(provider: Optional[Provider]) -> None:
 def version() -> None:
     """Print SleepCode version."""
     console.print(f"sleepcode {sleepcode.__version__}")
+
+
+@app.command()
+def setup() -> None:
+    """Run interactive setup wizard to configure primary LLM provider and default options."""
+    run_setup()
+
+
+@app.command()
+def doctor() -> None:
+    """Run SleepCode system diagnostic checks."""
+    all_passed = run_doctor()
+    if not all_passed:
+        raise typer.Exit(code=1)
 
 
 @config_app.command("set-key")

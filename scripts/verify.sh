@@ -48,7 +48,26 @@ assert 'git_status' not in schemas, 'git_status tool present without --allow-she
 print('Verified: run_shell and git tools absent without --allow-shell')
 "
 
-echo "=== Step 7: License, NOTICE, and SPDX headers check ==="
+echo "=== Step 7: Night-git safety checks ==="
+pytest tests/test_night_git_safety.py -q
+
+echo "=== Step 8: Prohibit 'git push' in src/ ==="
+if grep -rnEI "git push" src/; then
+    echo "ERROR: 'git push' string found in src/"
+    exit 1
+fi
+echo "Verified: No 'git push' string in src/"
+
+echo "=== Step 9: Prohibit key prompts without getpass in src/ ==="
+python3 -c "
+import inspect
+import sleepcode.setup_wizard
+src_code = inspect.getsource(sleepcode.setup_wizard)
+assert 'getpass' in src_code, 'getpass not found in setup_wizard.py'
+print('Verified: getpass is used for key prompt in setup_wizard.py')
+"
+
+echo "=== Step 10: License, NOTICE, and SPDX headers check ==="
 if [ ! -f "LICENSE" ]; then
     echo "ERROR: LICENSE file missing"
     exit 1
@@ -69,7 +88,7 @@ if [ "$MISSING_HEADERS" -eq 1 ]; then
     exit 1
 fi
 
-echo "=== Step 8: Key pattern leakage check ==="
+echo "=== Step 11: Key pattern leakage check ==="
 KEY_LEAKS=$(grep -rnEI --exclude="test_secrets.py" 'sk-[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{20,}' src/ tests/ docs/ || true)
 if [ -n "$KEY_LEAKS" ]; then
     echo "ERROR: Potential real API key pattern found outside test_secrets.py:"
@@ -77,7 +96,7 @@ if [ -n "$KEY_LEAKS" ]; then
     exit 1
 fi
 
-echo "=== Step 9: CLI e2e test with fake provider ==="
+echo "=== Step 12: CLI e2e test with fake provider ==="
 TEMP_WS=$(mktemp -d -t sleepcode-ws-XXXXXX)
 python3 -c "
 from pathlib import Path
