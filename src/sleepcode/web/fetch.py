@@ -85,11 +85,31 @@ def web_fetch(
         http_client = client
 
     def fetch_robots(robots_url: str) -> Tuple[Optional[int], Optional[str]]:
-        try:
-            r = http_client.get(robots_url, follow_redirects=True)
-            return r.status_code, r.text
-        except Exception:
+        cur_url = robots_url
+        v_ok, _ = validate_url_policy(cur_url, allowed_domains, dns_resolver=dns_resolver)
+        if not v_ok:
             return None, None
+        hops = 0
+        while hops <= max_redirects:
+            try:
+                r = http_client.get(cur_url)
+            except Exception:
+                return None, None
+            if r.is_redirect or r.status_code in (301, 302, 303, 307, 308):
+                location = r.headers.get("location")
+                if not location:
+                    return None, None
+                next_u = urllib.parse.urljoin(cur_url, location)
+                hops += 1
+                if hops > max_redirects:
+                    return None, None
+                val_ok, _ = validate_url_policy(next_u, allowed_domains, dns_resolver=dns_resolver)
+                if not val_ok:
+                    return None, None
+                cur_url = next_u
+            else:
+                return r.status_code, r.text
+        return None, None
 
     robots_ok, robots_reason = check_robots_allowed(url, fetch_robots_fn=fetch_robots)
     if not robots_ok:

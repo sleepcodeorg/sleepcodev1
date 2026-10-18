@@ -19,6 +19,25 @@ def test_system_prompt_contains_security_rule():
     assert "<<<UNTRUSTED_WEB_CONTENT" in SYSTEM_PROMPT
 
 
+def test_zero_real_dns_lookup_proven_by_raising_exception_resolver():
+    def raising_dns_resolver(host: str):
+        raise RuntimeError("DNS resolver called!")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="OK")
+
+    httpx_client = httpx.Client(transport=httpx.MockTransport(handler))
+    fetch_tool = WebFetchTool(
+        allowed_domains=["example.com"],
+        client=httpx_client,
+        dns_resolver=raising_dns_resolver,
+    )
+
+    res = fetch_tool.run({"url": "https://example.com/page"})
+    assert not res.ok
+    assert "DNS resolver called!" in res.output
+
+
 def test_prompt_injection_safety_with_fake_provider(tmp_path, monkeypatch):
     monkeypatch.setenv("SLEEPCODE_HOME", str(tmp_path))
 
@@ -43,7 +62,16 @@ def test_prompt_injection_safety_with_fake_provider(tmp_path, monkeypatch):
     registry = ToolRegistry()
 
     cache = WebCache()
-    fetch_tool = WebFetchTool(allowed_domains=["example.com"], cache=cache, client=httpx_client)
+
+    def fake_dns(host: str):
+        return ["93.184.216.34"]
+
+    fetch_tool = WebFetchTool(
+        allowed_domains=["example.com"],
+        cache=cache,
+        client=httpx_client,
+        dns_resolver=fake_dns,
+    )
     registry.register(fetch_tool)
 
     call_fetch = ProviderResponse(

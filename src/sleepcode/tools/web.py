@@ -82,10 +82,12 @@ class WebFetchTool(Tool):
         allowed_domains: List[str],
         cache: Optional[WebCache] = None,
         client: Optional[httpx.Client] = None,
+        dns_resolver: Optional[Any] = None,
     ) -> None:
         self.allowed_domains = allowed_domains
         self.cache = cache or WebCache()
         self.client = client
+        self.dns_resolver = dns_resolver
 
     def run(self, arguments: Dict[str, Any], dry_run: bool = False) -> ToolResult:
         url = str(arguments.get("url", ""))
@@ -94,6 +96,7 @@ class WebFetchTool(Tool):
             fetch_res = web_fetch(
                 url=url,
                 allowed_domains=self.allowed_domains,
+                dns_resolver=self.dns_resolver,
                 client=self.client,
                 cache=self.cache,
             )
