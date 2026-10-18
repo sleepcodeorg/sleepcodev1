@@ -61,6 +61,17 @@ sleepcode run "Fix failing tests in user auth module" \
   --repair-attempts 2
 ```
 
+## Letting the agent search the web
+
+SleepCode includes controlled web search and fetch tools managed by permission tiers:
+```bash
+sleepcode web status                         # Show current permission tier and allowed domains
+sleepcode web set search                     # Enable web search and page fetch
+sleepcode web allow-domain docs.python.org   # Add domain to allowlist
+sleepcode web log --latest                   # View recent web fetch/search audit log
+```
+All retrieved web content is treated as untrusted data and isolated inside security blocks to prevent prompt injection.
+
 ## Safety Note
 The `--allow-shell` flag enables shell execution (`run_shell`) and local git tools (`git_status`, `git_diff`, `git_create_branch`, `git_commit`). The allowlist and operator rejection filters reduce accidental errors, but **they do NOT constitute a security sandbox**. Runtimes like `python` and `pytest` can execute arbitrary code inside the workspace. During overnight runs (`sleepcode night start`), commits are strictly isolated to task branches, secret files (`.env`, `*.key`) are blocked from commits, and zero push operations are performed. See `docs/safety.md` for full details.
 

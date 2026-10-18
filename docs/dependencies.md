@@ -12,3 +12,6 @@ All third-party dependencies used by SleepCode Phase 1 are licensed under permis
 | `pytest` | `>=7.0.0` | MIT | Testing framework |
 | `ruff` | `>=0.1.0` | MIT | Python linter and code formatter |
 | `mypy` | `>=1.0.0` | MIT | Static type checker |
+| `httpx` | `>=0.24.0` | BSD-3-Clause | HTTP client with async/sync support |
+| `beautifulsoup4` | `>=4.12.0` | MIT | HTML parser and DOM manipulation |
+| `markdownify` | `>=0.11.0` | MIT | HTML to Markdown conversion |

@@ -4,7 +4,7 @@
 SleepCode (Phases 1-3) provides an autonomous overnight coding agent with safe shell execution, git tools, an SQLite task queue, overnight window/budget execution, secret redaction, and morning report generation. It runs locally, accepts user tasks, uses LLMs via LiteLLM, executes workspace tools, and enforces strict token, cost, time, and safety limits.
 
 ## Core Components
-- **CLI (`sleepcode.cli`)**: Typer and Rich-based interface for commands (`version`, `config set-key`, `config list`, `run`, `setup`, `doctor`, `queue`, `night`, `report`).
+- **CLI (`sleepcode.cli`)**: Typer and Rich-based interface for commands (`version`, `config set-key`, `config list`, `run`, `setup`, `doctor`, `queue`, `night`, `report`, `web`).
 - **Setup Wizard & Doctor (`sleepcode.setup_wizard`, `sleepcode.doctor`)**:
   - `setup`: Interactive provider selection, hidden API key prompt via `getpass`, file creation mode `0600` at `~/.sleepcode/config.yaml`, and single minimal test call verification.
   - `doctor`: Environment check (Python 3.11+, git, config permissions 0600, API keys, SQLite DB writable).
@@ -30,6 +30,9 @@ SleepCode (Phases 1-3) provides an autonomous overnight coding agent with safe s
 - **Tools (`sleepcode.tools`)**:
   - Files: `read_file`, `write_file`, `edit_file`, `list_dir`, `search`.
   - Shell & Git: `run_shell`, `git_status`, `git_diff`, `git_create_branch`, `git_commit` (registered only when `--allow-shell` is explicitly passed).
+  - Web: `web_search`, `web_fetch` (registered only when tier is `search` and search provider configured).
+- **Web & Security (`sleepcode.web`)**:
+  - Permission tiers (`off`, `search`), URL policy engine, private IP blocking, 5-hop redirect limits, robots.txt parsing, SHA-256 disk cache (0600), untrusted data wrapping, and audit event logger.
 
 ## Future Extension Points (Phases 4-5)
 - **Phase 4 (Dashboard & Web UI)**: Web API reading task queue DB and event logs.

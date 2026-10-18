@@ -88,12 +88,16 @@ def generate_morning_report(
 
         notes_excerpt = truncate_excerpt(latest_run.notes, 500)
 
+        web_tier_val = getattr(latest_run, "web_tier", None) or "off"
+        web_str = f"Web access: {web_tier_val}"
+
         section = (
             f"### Task #{task.id}: {redact_secrets(task.task_text)}\n"
             f"- **Status:** {status_label}\n"
             f"- **Branch:** `{task.branch_name or 'None'}`\n"
             f"- **Files Changed:** {files_display}\n"
             f"- **Tests:** {tests_str}\n"
+            f"- **{web_str}**\n"
             f"- **Cost:** ${cost:.4f}\n"
             f"- **Notes:** {notes_excerpt}\n"
             f"- **What to do next:** {next_action}\n"

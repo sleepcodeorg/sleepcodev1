@@ -1,6 +1,7 @@
 # Copyright 2026 SleepCode contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +26,12 @@ from sleepcode.tools.git import GitCommitTool, GitCreateBranchTool, GitDiffTool,
 from sleepcode.tools.registry import ToolRegistry
 from sleepcode.tools.search import SearchTool
 from sleepcode.tools.shell import RunShellTool
+from sleepcode.tools.web import WebFetchTool, WebSearchTool
+from sleepcode.web.cli import web_app
+from sleepcode.web.search.base import SearchProvider
+from sleepcode.web.search.brave import BraveSearchProvider
+from sleepcode.web.search.searxng import SearXNGSearchProvider
+from sleepcode.web.tiers import WebTier, resolve_effective_web_tier
 from sleepcode.workspace import Workspace
 
 app = typer.Typer(
@@ -37,6 +44,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(queue_app, name="queue")
 app.add_typer(night_app, name="night")
 app.add_typer(report_app, name="report")
+app.add_typer(web_app, name="web")
 
 console = Console()
 
@@ -114,6 +122,9 @@ def run(
     ),
     max_iterations: int = typer.Option(40, "--max-iterations", help="Maximum agent iterations"),
     max_cost_usd: float = typer.Option(2.00, "--max-cost-usd", help="Maximum cost limit in USD"),
+    web: Optional[str] = typer.Option(
+        None, "--web", help="Web permission tier ('off' or 'search')"
+    ),
 ) -> None:
     """Run an autonomous task in a workspace."""
     workspace_path = workspace.expanduser().resolve()
@@ -162,6 +173,26 @@ def run(
         registry.register(GitDiffTool(ws))
         registry.register(GitCreateBranchTool(ws))
         registry.register(GitCommitTool(ws))
+
+    effective_web_tier = resolve_effective_web_tier(config.web.tier, web)
+    if effective_web_tier == WebTier.SEARCH:
+        brave_key = os.getenv("BRAVE_API_KEY") or config.keys.get("brave")
+        searxng_url = os.getenv("SEARXNG_URL")
+
+        search_provider: Optional[SearchProvider] = None
+        if brave_key:
+            search_provider = BraveSearchProvider(api_key=brave_key)
+        elif searxng_url:
+            search_provider = SearXNGSearchProvider(base_url=searxng_url)
+
+        if search_provider:
+            registry.register(WebSearchTool(search_provider=search_provider))
+            registry.register(WebFetchTool(allowed_domains=config.web.allowed_domains))
+        else:
+            console.print(
+                "[bold yellow]Web search requested, but no search provider configured "
+                "(BRAVE_API_KEY or SEARXNG_URL missing). Search tools omitted.[/bold yellow]"
+            )
 
     limits = AgentLimits(
         max_iterations=max_iterations,

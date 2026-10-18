@@ -28,6 +28,18 @@ Unattended runs carry higher risk because no human is actively watching terminal
 
 ---
 
+## Web Access & Permission Tiers Safety Model
+
+When web access is enabled (Tier 1 `search`), SleepCode enforces strict isolation boundaries around internet data:
+
+1. **Explicit Opt-in for Night Runs**: Night runs default strictly to Tier 0 (`off`) unless `--web search` is explicitly passed on the command line.
+2. **IP Range Restrictions**: `web_fetch` validates resolved IP addresses before connecting. Calls to private (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`), and metadata service addresses (`169.254.169.254`) are strictly refused.
+3. **Redirect Hop Limits**: Redirects are checked on every hop (max 5 hops). Redirecting to a restricted IP address or non-allowlisted domain cancels the fetch.
+4. **Untrusted Data Isolation**: All retrieved web content is wrapped in `<UNTRUSTED_WEB_CONTENT>` tags and sanitized to prevent closing-tag prompt injection. System prompt rules dictate web content is data, never instructions.
+5. **Robots.txt Adherence**: `web_fetch` retrieves and respects `robots.txt` before fetching page content.
+
+---
+
 ## Default Allowlisted Commands Table
 
 | Command | Category | Capabilities & Permissions | Prohibitions & Safety Restrictions |

@@ -96,7 +96,17 @@ if [ -n "$KEY_LEAKS" ]; then
     exit 1
 fi
 
-echo "=== Step 12: CLI e2e test with fake provider ==="
+echo "=== Step 12: Phase 3.5 Web Policy & Prompt Injection Checks ==="
+pytest tests/test_web_policy.py tests/test_web_injection.py -q
+
+echo "=== Step 13: Prohibit 'shell=True' in src/ ==="
+if grep -rnEI "shell=True" src/; then
+    echo "ERROR: 'shell=True' found in src/"
+    exit 1
+fi
+echo "Verified: No 'shell=True' found in src/"
+
+echo "=== Step 14: CLI e2e test with fake provider ==="
 TEMP_WS=$(mktemp -d -t sleepcode-ws-XXXXXX)
 python3 -c "
 from pathlib import Path

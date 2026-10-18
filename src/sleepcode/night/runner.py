@@ -1,6 +1,7 @@
 # Copyright 2026 SleepCode contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -30,6 +31,11 @@ from sleepcode.tools.git import GitCommitTool, GitCreateBranchTool, GitDiffTool,
 from sleepcode.tools.registry import ToolRegistry
 from sleepcode.tools.search import SearchTool
 from sleepcode.tools.shell import RunShellTool
+from sleepcode.tools.web import WebFetchTool, WebSearchTool
+from sleepcode.web.search.base import SearchProvider
+from sleepcode.web.search.brave import BraveSearchProvider
+from sleepcode.web.search.searxng import SearXNGSearchProvider
+from sleepcode.web.tiers import WebTier, resolve_effective_web_tier
 from sleepcode.workspace import Workspace
 
 _test_night_provider_override: Optional[Provider] = None
@@ -49,6 +55,7 @@ class NightRunner:
         window_str: str = "23:00-07:00",
         night_budget_usd: float = 5.00,
         allow_shell: bool = False,
+        web_tier_str: Optional[str] = None,
         once: bool = False,
         max_tasks: int = 10,
         clock: Optional[Callable[[], datetime]] = None,
@@ -56,6 +63,7 @@ class NightRunner:
         self.window_mgr = WindowManager(window_str, clock=clock)
         self.tracker = NightTracker(night_budget_usd)
         self.allow_shell = allow_shell
+        self.web_tier_str = web_tier_str
         self.once = once
         self.max_tasks = max_tasks
         self.window_str = window_str
@@ -151,6 +159,24 @@ class NightRunner:
                 registry.register(GitCreateBranchTool(ws))
                 registry.register(GitCommitTool(ws))
 
+            effective_web_tier = WebTier.OFF
+            if self.web_tier_str is not None:
+                effective_web_tier = resolve_effective_web_tier("off", self.web_tier_str)
+
+            if effective_web_tier == WebTier.SEARCH:
+                brave_key = os.getenv("BRAVE_API_KEY") or config.keys.get("brave")
+                searxng_url = os.getenv("SEARXNG_URL")
+
+                search_provider: Optional[SearchProvider] = None
+                if brave_key:
+                    search_provider = BraveSearchProvider(api_key=brave_key)
+                elif searxng_url:
+                    search_provider = SearXNGSearchProvider(base_url=searxng_url)
+
+                if search_provider:
+                    registry.register(WebSearchTool(search_provider=search_provider))
+                    registry.register(WebFetchTool(allowed_domains=config.web.allowed_domains))
+
             effective_budget = self.tracker.get_task_effective_budget(task.budget_usd)
             limits = AgentLimits(max_cost_usd=effective_budget)
             extra_secrets = {api_key} if api_key else set()
@@ -218,6 +244,11 @@ class NightRunner:
                 tests_passed=tests_passed,
                 notes=notes + f" | {cost_note}",
             )
+            with repo_obj.conn:
+                repo_obj.conn.execute(
+                    "UPDATE runs SET web_tier = ? WHERE id = ?;",
+                    (effective_web_tier.name.lower(), run_record.id),
+                )
             repo_obj.update_task_status(task.id, final_status, branch_name=task_branch)
 
         except Exception as e:
