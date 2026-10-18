@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import httpx
-from sleepcode.tools.web import WebFetchTool
 
 from sleepcode.agent.loop import AgentLoop
 from sleepcode.agent.prompts import SYSTEM_PROMPT
 from sleepcode.providers.base import ProviderResponse, ToolCall
 from sleepcode.providers.fake_provider import FakeProvider
 from sleepcode.tools.registry import ToolRegistry
+from sleepcode.tools.web import WebFetchTool
 from sleepcode.web.cache import WebCache
 from sleepcode.web.untrusted import UNTRUSTED_END_TAG
 from sleepcode.workspace import Workspace
