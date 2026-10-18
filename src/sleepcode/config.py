@@ -9,10 +9,17 @@ import yaml
 from pydantic import BaseModel, Field
 
 
+class WebConfig(BaseModel):
+    tier: str = "off"
+    allowed_domains: List[str] = Field(default_factory=list)
+    cache_ttl_hours: int = 24
+
+
 class SleepCodeConfig(BaseModel):
     keys: Dict[str, str] = Field(default_factory=dict)
     default_model: Optional[str] = None
     allowed_commands: Optional[List[str]] = None
+    web: WebConfig = Field(default_factory=WebConfig)
 
 
 def get_config_dir() -> Path:
