@@ -7,6 +7,7 @@ from sleepcode.tools.base import Tool, ToolResult
 from sleepcode.tools.files import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from sleepcode.tools.registry import ToolRegistry
 from sleepcode.tools.search import SearchTool
+from sleepcode.tools.web import WebFetchTool, WebSearchTool
 
 __all__ = [
     "Tool",
@@ -17,4 +18,6 @@ __all__ = [
     "EditFileTool",
     "ListDirTool",
     "SearchTool",
+    "WebSearchTool",
+    "WebFetchTool",
 ]

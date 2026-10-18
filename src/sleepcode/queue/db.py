@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sleepcode.config import get_config_dir
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 
 def get_db_path() -> Path:
@@ -87,5 +87,16 @@ def migrate_db(conn: sqlite3.Connection) -> None:
 
                 DELETE FROM schema_version;
                 INSERT INTO schema_version (version) VALUES (1);
+                """
+            )
+            current_ver = 1
+
+        if current_ver < 2:
+            conn.executescript(
+                """
+                ALTER TABLE runs ADD COLUMN web_tier TEXT;
+
+                DELETE FROM schema_version;
+                INSERT INTO schema_version (version) VALUES (2);
                 """
             )

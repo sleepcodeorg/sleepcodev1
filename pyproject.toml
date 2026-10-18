@@ -18,6 +18,9 @@ dependencies = [
     "litellm>=1.0.0",
     "pydantic>=2.0.0",
     "pyyaml>=6.0",
+    "httpx>=0.24.0",
+    "beautifulsoup4>=4.12.0",
+    "markdownify>=0.11.0",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +29,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "types-PyYAML>=6.0",
+    "types-beautifulsoup4>=4.12.0",
 ]
 
 [project.scripts]
