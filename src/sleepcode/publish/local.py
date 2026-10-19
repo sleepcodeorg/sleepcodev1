@@ -17,7 +17,7 @@ class LocalPublisher(Publisher):
         title: str,
         body: str,
     ) -> PublishResult:
-        """Validate the branch name and return a local-only result. Never runs git push."""
+        """Validate the branch name and return a local-only result. Never pushes to remote."""
         refusal = check_branch_allowed(branch_name)
         if refusal is not None:
             return PublishResult(ok=False, message=refusal)
